@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('build') {
+            steps {
+                script {
+                    def dockerfileContent = '''
+                        FROM tomcat:9.0
+                        COPY ./webapp /usr/local/tomcat/webapps/helloilker2
+                        EXPOSE 9090
+                        CMD ["catalina.sh", "run"]
+                    '''
+                    writeFile file: 'Dockerfile', text: dockerfileContent
+                    
+                    def indexHtml = '''
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>hello world</title>
+                        </head>
+                        <body>
+                            <h1>-ilker</h1>
+                        </body>
+                        </html>
+                    '''
+                    writeFile file: 'webapp/index.html', text: indexHtml
+                    
+                    sh 'sudo docker build -t helloilker2 .'
+                }
+            }
+        }
+        
+        stage('push') {
+            steps {
+                script {
+                    sh 'sudo docker tag helloilker2 192.168.0.31:5000/helloilker2'
+                    sh 'sudo docker push 192.168.0.31:5000/helloilker2'
+                }
+            }
+        }
+        
+        stage('deploy') {
+            steps {
+                script {
+                    sshCommand remote: "master@192.168.0.51", command: "kubectl create deployment helloilker2 --image=192.168.0.31:5000/helloilker2"
+                    
+                    sshCommand remote: "worker@192.168.0.49", command: "kubectl create deployment helloilker2 --image=192.168.0.31:5000/helloilker2"
+                }
+            }
+        }
+    }
+}
