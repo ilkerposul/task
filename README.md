@@ -1,7 +1,5 @@
 # task
 
-task is below. I've done all parts but on my local and you may find the jenkins file that I used for part 6 in the files.
-
 SERVER NAMES
 
                 Server-1
