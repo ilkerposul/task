@@ -6,19 +6,19 @@
 				steps {
 					script {
 						writeFile file: 'app.py', text: '''
-						from flask import Flask
-						import os
+from flask import Flask
+import os
 
-						app = Flask(__name__)
+app = Flask(__name__)
 
-						@app.route("/")
-						def hello():
-							return "hello"
+@app.route("/")
+def hello():
+	return "hello"
 
-						if __name__ == "__main__":
-							port = int(os.environ.get("PORT", 5000))
-							app.run(debug=True, host='0.0.0.0', port=port)
-						'''
+if __name__ == "__main__":
+	port = int(os.environ.get("PORT", 5000))
+	app.run(debug=True, host='0.0.0.0', port=port)
+'''
 					}
 				}
 			}
@@ -27,12 +27,12 @@
 				steps {
 					script {
 						writeFile file: 'Dockerfile', text: '''
-						FROM python:3.6
-						COPY app.py /app/
-						WORKDIR /app
-						RUN pip install flask
-						CMD ["python", "app.py"]
-						'''
+FROM python:3.6
+COPY app.py /app/
+WORKDIR /app
+RUN pip install flask
+CMD ["python", "app.py"]
+'''
 						
 						
 					}
