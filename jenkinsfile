@@ -1,53 +1,109 @@
-pipeline {
-    agent any
-    
-    stages {
-        stage('build') {
-            steps {
-                script {
-                    def dockerfileContent = '''
-                        FROM tomcat:9.0
-                        COPY ./webapp /usr/local/tomcat/webapps/helloilker2
-                        EXPOSE 9090
-                        CMD ["catalina.sh", "run"]
-                    '''
-                    writeFile file: 'Dockerfile', text: dockerfileContent
-                    
-                    def indexHtml = '''
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>hello world</title>
-                        </head>
-                        <body>
-                            <h1>-ilker</h1>
-                        </body>
-                        </html>
-                    '''
-                    writeFile file: 'webapp/index.html', text: indexHtml
-                    
-                    sh 'sudo docker build -t helloilker2 .'
-                }
-            }
-        }
-        
-        stage('push') {
-            steps {
-                script {
-                    sh 'sudo docker tag helloilker2 192.168.0.31:5000/helloilker2'
-                    sh 'sudo docker push 192.168.0.31:5000/helloilker2'
-                }
-            }
-        }
-        
-        stage('deploy') {
-            steps {
-                script {
-                    sshCommand remote: "master@192.168.0.51", command: "kubectl create deployment helloilker2 --image=192.168.0.31:5000/helloilker2"
-                    
-                    sshCommand remote: "worker@192.168.0.49", command: "kubectl create deployment helloilker2 --image=192.168.0.31:5000/helloilker2"
-                }
-            }
-        }
-    }
-}
+	pipeline {
+		agent any
+
+		stages {
+			stage('app') {
+				steps {
+					script {
+						writeFile file: 'app.py', text: '''
+						from flask import Flask
+						import os
+
+						app = Flask(__name__)
+
+						@app.route("/")
+						def hello():
+							return "hello"
+
+						if __name__ == "__main__":
+							port = int(os.environ.get("PORT", 5000))
+							app.run(debug=True, host='0.0.0.0', port=port)
+						'''
+					}
+				}
+			}
+			
+			stage('dockerfile') {
+				steps {
+					script {
+						writeFile file: 'Dockerfile', text: '''
+						FROM python:3.6
+						COPY app.py /app/
+						WORKDIR /app
+						RUN pip install flask
+						CMD ["python", "app.py"]
+						'''
+						
+						
+					}
+				}
+			}
+
+			stage('image') {
+				steps {
+					script {
+					
+						sh 'sudo docker build -t hello .'
+						sh 'sudo docker tag hello 192.168.0.31:5000/hello'
+						sh 'sudo docker push 192.168.0.31:5000/hello'
+					}
+				}
+			}
+
+			stage('yamls') {
+				steps {
+					script {
+						writeFile file: 'deployment.yaml', text: '''
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - name: hello-world
+        image: 192.168.0.31:5000/hello
+        imagePullPolicy: Always
+'''
+						
+						writeFile file: 'service.yaml', text: '''
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-service
+spec:
+  selector:
+    app: hello
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer
+'''
+					}
+				}
+			}
+
+			stage('deploy') {
+				steps {
+					script {
+						
+						sh 'sudo scp -o StrictHostKeyChecking=no deployment.yaml service.yaml root@192.168.0.32://root'
+						sh 'sudo scp -o StrictHostKeyChecking=no deployment.yaml service.yaml root@192.168.0.33://root'
+						sh 'sudo ssh root@192.168.0.32 kubectl apply -f //root/deployment.yaml'
+						sh 'sudo ssh root@192.168.0.32 kubectl apply -f //root/service.yaml'
+						sh 'sudo ssh root@192.168.0.33 kubectl apply -f //root/deployment.yaml'
+						sh 'sudo ssh root@192.168.0.33 kubectl apply -f //root/service.yaml'
+					}
+				}
+			}
+		}
+	}
